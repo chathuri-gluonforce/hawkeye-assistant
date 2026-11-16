@@ -53,6 +53,7 @@ export default function ChatPage() {
     patch(m.id, { feedback: "done", note: "Thanks. No new lesson was needed." });
     try {
       await sendFeedback(m.asked!, m.intent!, m.intent!);
+      refresh();
     } catch {
       patch(m.id, { note: "Could not save feedback." });
     }
