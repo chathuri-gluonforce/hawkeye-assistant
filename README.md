@@ -1,254 +1,161 @@
-# Self-Improving Intent Agent
+# Hawkeye Assistant
 
-A reconciliation **intent classifier** that improves without changing the underlying model. The LLM stays frozen. What improves is:
+Hawkeye Assistant is a reconciliation intent classifier with a web chat interface. It classifies customer messages into operational intents and points users to the appropriate place in a reconciliation workflow.
 
-1. **The prompt**, through batch training (OPRO-style rewrites scored on training data).
-2. **The memory**, through lessons stored in ChromaDB. Lessons come from training mistakes and from user feedback in chat.
+The project does not fine-tune the language model. Instead, it can improve its behavior by:
 
-The LLM is called through [OpenRouter](https://openrouter.ai/). The default model is `openai/gpt-4o-mini`, set by `OPENROUTER_MODEL` in `.env`.
+- Rewriting and evaluating its classification prompt during batch training (an OPRO-style loop).
+- Saving short lessons from mistakes in ChromaDB and retrieving relevant lessons during classification.
+- Using user feedback in self-improving mode to reinforce lessons or add a new lesson.
+
+The backend is a FastAPI service. The primary web UI is a Next.js app in `ui/`. An additional Streamlit UI is available at `src/hawkeye_assistant/ui/streamlit_app.py`.
 
 ## Intent labels
 
-| Label | Shown in UI as | Assistant task |
-|-------|----------------|----------------|
-| `match_invoice` | Match invoice | Warn: matching is not done in the assistant; use Workbench / Reconcile |
-| `unmatched_items` | Unmatched items | Point to unmatched / Outstanding Items |
-| `upload_document` | Upload document | Guide to Ingestion Hub for invoice/statement import |
-| `amount_mismatch` | Amount mismatch | Explain amount gaps; keep outstanding, not a posted match |
-| `recon_status` | Recon status | Summarize progress; point to Reconcile / filters |
-| `show_details` | Show details | Direct to detail view for a txn / invoice / match |
-| `audit_query` | Audit log | Point to audit log (who did what) |
-| `other` | Other | Greetings / unclear / off-topic |
+| Label | UI name | Guidance |
+|---|---|---|
+| `match_invoice` | Match invoice | Matching is not done in chat; use Workbench / Reconcile. |
+| `unmatched_items` | Unmatched items | Open Reconcile and filter for unmatched or outstanding items. |
+| `upload_document` | Upload document | Use the Ingestion Hub to import invoices or statements. |
+| `amount_mismatch` | Amount mismatch | Review the amount gap in the Workbench; do not post a match. |
+| `recon_status` | Recon status | Check progress and status filters in Reconcile. |
+| `show_details` | Show details | Open the relevant ledger row, candidate pane, outstanding item, or match. |
+| `audit_query` | Audit log | Check the audit log for who did what. |
+| `other` | Other | Used for greetings, unclear, or unrelated requests. |
 
-The labels are defined as `LABELS` in `src/hawkeye_assistant/agent/classify.py`.
-
-## Architecture
+## How it works
 
 ```mermaid
 flowchart LR
-  subgraph training [Batch training]
-    TR[data/train.json] --> EV[evaluation]
-    EV --> MEM1[memory: add lessons]
-    EV --> OPRO[optimizer: new prompt]
-    OPRO --> RES[(storage/results.json)]
-  end
-  subgraph inference [Classify]
-    RES --> CL[agent.classify]
-    DB[(storage/memory_db Chroma)] --> CL
-    CL --> LLM[OpenRouter LLM]
-  end
-  UI[Streamlit UI] --> API[FastAPI]
-  API --> training
-  API --> inference
+  Browser[Next.js UI] --> API[FastAPI]
+  API --> Classify[Intent classifier]
+  Classify --> LLM[OpenRouter]
+  Classify <--> Memory[(ChromaDB lessons)]
+  API --> Training[Training loop]
+  Training --> Data[Train and test JSON]
+  Training --> Results[(Best prompt and scores)]
+  Results --> Classify
 ```
 
-| Piece | Role |
-|-------|------|
-| `storage/results.json` | Best prompt, training log, and test scores. Written by training. |
-| `storage/memory_db/` | Chroma collection `lessons`. Holds short rules and their scores. |
-| Default prompt | Used when `results.json` does not exist yet, or when a request turns memory and the trained prompt off. |
+- `data/train.json` is used to evaluate and improve prompts and lessons.
+- `data/test.json` is held out for scoring. Test evaluation does not teach or update lessons.
+- `data/demo.json` supplies sample messages for the Demo set page.
+- `storage/memory_db/` contains the local ChromaDB lesson store.
+- `storage/results.json` contains the best prompt, training log, and test scores.
+
+The `storage/` files are generated locally and are not included in Git.
 
 ## Requirements
 
-- Python **3.14** or newer (`pyproject.toml`)
+- Python **3.14 or newer**
 - [uv](https://docs.astral.sh/uv/)
-- An OpenRouter API key
+- Node.js and npm
+- An [OpenRouter](https://openrouter.ai/) API key
 
 ## Setup
 
+From the repository root, install the Python dependencies:
+
 ```bash
-cd hawkeye-assistant
 uv sync
-cp .env.example .env
 ```
 
-Edit `.env`:
+Create a `.env` file in the repository root with your OpenRouter settings:
 
 ```env
 OPENROUTER_API_KEY=your_key_here
 OPENROUTER_MODEL=openai/gpt-4o-mini
+# Optional; defaults to https://openrouter.ai/api/v1
 # OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 ```
 
-Settings load through Pydantic Settings in `src/hawkeye_assistant/config.py`. The API key is never printed. Restart the API after changing `.env`, because settings are cached.
+Do not commit `.env` or share your API key. Settings are loaded when the backend starts, so restart the API after changing `.env`.
 
-## Running the app
-
-Use two terminals from the project root.
-
-**Terminal 1: API**
+Install the web UI dependencies:
 
 ```bash
-uv run uvicorn hawkeye_assistant.api.app:app --reload
+cd ui
+npm install
 ```
 
-API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+## Run locally
 
-**Terminal 2: UI**
+Start the backend and web UI in separate terminals. Start the API first.
+
+**Terminal 1 — FastAPI** (from the repository root):
+
+```bash
+uv run --python 3.14 uvicorn hawkeye_assistant.api.app:app --reload
+```
+
+The API is available at [http://127.0.0.1:8000](http://127.0.0.1:8000). Interactive API documentation is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+**Terminal 2 — Next.js UI**:
+
+```bash
+cd ui
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). By default, the Next.js app forwards `/api/*` requests to `http://127.0.0.1:8000`. To use another backend address, set `API_URL` before starting Next.js.
+
+### Optional: Streamlit UI
+
+The repository also includes the earlier Streamlit interface. With the API running, start it from the repository root:
 
 ```bash
 uv run streamlit run src/hawkeye_assistant/ui/streamlit_app.py
 ```
 
-Open [http://localhost:8501](http://localhost:8501). Start the API first, because the UI calls it.
+Open the address printed by Streamlit (normally [http://localhost:8501](http://localhost:8501)).
 
-### Training from the command line
+## Using the web UI
+
+- **Chat**: Submit a customer message to see its predicted intent and workflow guidance.
+- **Normal mode**: Uses the default prompt and does not request lessons or feedback.
+- **Self-improving mode**: Uses the best trained prompt and retrieved lessons when available, and lets you confirm or correct predictions.
+- **Before vs After**: Compare a classification with the default prompt and without memory against the trained prompt and retrieved lessons.
+- **Demo set**: Run the messages in `data/demo.json` through the classifier.
+- **Training**: View training results and run training. Training makes LLM calls and can take time.
+
+Training is optional. Before the first training run, classification can use the default prompt. To use the trained prompt, run training from the Training page or use the API below.
+
+## Training
+
+Run the default five-round training loop from the repository root:
 
 ```bash
 uv run python -m hawkeye_assistant.training.train
 ```
 
-This runs the same loop as the **Run training** button, with 5 rounds.
+Training evaluates examples in `data/train.json`, creates lessons from selected mistakes, updates lesson scores, and asks the LLM to rewrite the prompt. After training, the best prompt is evaluated against `data/test.json` and the results are saved to `storage/results.json`.
 
-## The UI
+Training and classification call the configured OpenRouter model. These calls may incur API usage or charges. The number of rounds can also be set through the API.
 
-### Sidebar
+## API
 
-| Control | What it does |
-|---------|----------------|
-| **Which agent replies in chat** | **Normal**: original prompt, no memory, no feedback. **Self-improving**: trained prompt plus retrieved lessons, with Yes/No feedback. |
-| **Lessons** | Every lesson in memory with its score. Refreshes after chat feedback and after training. |
+The service runs on port `8000` by default.
 
-### Tabs
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/classify` | Classify a message. Body: `{"text":"...", "use_memory":true, "use_best_prompt":true}`. The two flags default to `true`. |
+| `POST` | `/feedback` | Submit a prediction and its correct intent. Body: `{"text":"...", "predicted":"...", "correct":"..."}`. |
+| `POST` | `/train?rounds=5` | Run batch training. |
+| `GET` | `/results` | Read saved training results; returns `404` before training has produced results. |
+| `GET` | `/results?ensure_before=true` | Also score and save the default prompt's test score if it has not been calculated yet. |
+| `GET` | `/lessons` | List lessons and their scores. |
 
-| Tab | What it does |
-|-----|----------------|
-| **Chat** | Chat window with a **Typing...** indicator while the API works. Self-improving mode shows lessons used for each reply and asks **Is that right?** with Yes and No. Choosing No opens an intent picker. |
-| **Before vs After** | Classifies one message twice: original prompt with no memory, then trained prompt with retrieved lessons. Enter the correct intent to mark each guess right or wrong. |
-| **Demo set** | Runs every message in `data/demo.json` before and after, then shows the number correct and a table. |
-| **Training results** | Train-score chart, before and after test scores, prompt history, first and best prompt, and the lessons table. **Compute before score** runs once and is saved. **Run training** is at the bottom. |
-
-## How batch training works
-
-Each round:
-
-1. **Evaluate.** Classify every example in `data/train.json` with the current prompt. Record the mistakes.
-2. **Remember.** Ask the LLM for a short rule for each of the first 3 mistakes. Save each rule with score 0. A rule is skipped if a very similar lesson already exists (distance under 0.2).
-3. **Reinforce.** Each lesson retrieved during evaluation gets +1 if that guess was right and −1 if it was wrong.
-4. **Prune.** `memory.cleanup()` deletes lessons with score −2 or lower.
-5. **Rewrite the prompt.** The LLM sees the prompt history and up to 5 mistakes, then writes a new prompt inside `<PROMPT></PROMPT>`.
-
-After the rounds, the prompt with the best training score is evaluated on `data/test.json`. The result is written to `storage/results.json`.
-
-The test set is not used for learning. Test evaluation does not add or change lessons.
-
-## How chat feedback works
-
-Feedback exists only in **Self-improving** mode.
-
-1. `POST /classify` with `use_memory: true` and `use_best_prompt: true` returns the intent and the lessons that were retrieved.
-2. The user presses **Yes** or **No**. The UI calls `POST /feedback`.
-
-| Button | Effect |
-|--------|--------|
-| **Yes** | +1 on each lesson that was retrieved for that message. No new lesson is saved. The reply is "Thanks. That guess was right, so no new lesson was added." |
-| **No** | −1 on each retrieved lesson. The LLM writes one rule for the mistake. The rule is saved at score 0 unless a very similar lesson already exists. The user then picks the correct intent. |
-
-Feedback never deletes lessons. Cleanup runs only during training.
-
-A new lesson starts at score 0. A score of 0 does not mean the lesson is removed.
-
-## API reference
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/train?rounds=5` | Run the training loop. Returns `log`, `best_prompt`, and `test_score`. |
-| `GET` | `/results` | Read `storage/results.json`. Returns **404** until training has run. |
-| `GET` | `/results?ensure_before=true` | Score the original prompt on the test set once, with no memory, and save `test_score_before`. |
-| `POST` | `/classify` | Body: `{"text", "use_memory", "use_best_prompt"}`. Both flags default to `true`. Returns `intent`, `prompt`, and `lessons`. |
-| `POST` | `/feedback` | Body: `{"text", "predicted", "correct"}`. Same intent returns `{"learned": "confirmed"}`. A different intent returns `{"learned": "corrected", "lesson": "..."}`. |
-| `GET` | `/lessons` | Returns `[{"lesson", "score"}, ...]`. |
-
-### Example
+Example classification request:
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/classify \
+curl -X POST http://127.0.0.1:8000/classify \
   -H 'Content-Type: application/json' \
-  -d '{"text": "Who tied payment 9912 to invoice INV-88?", "use_memory": false, "use_best_prompt": false}'
-
-curl -s -X POST http://127.0.0.1:8000/feedback \
-  -H 'Content-Type: application/json' \
-  -d '{"text": "Who tied payment 9912 to invoice INV-88?", "predicted": "match_invoice", "correct": "audit_query"}'
+  -d '{"text":"Who matched this payment to the invoice?","use_memory":false,"use_best_prompt":false}'
 ```
-
-## Data
-
-Each data file is a JSON array of objects with `text` and `intent`:
-
-| File | Used for |
-|------|----------|
-| `data/train.json` | Training: evaluation, lessons, and prompt rewrites |
-| `data/test.json` | Held-out score after training, and the before score |
-| `data/demo.json` | The Demo set tab |
-
-The training set is deliberately hard. It includes confusable pairs such as audit log vs match invoice, upload vs match, amount gap vs unmatched, and recon vs unmatched.
-
-## Configuration
-
-| Setting | Where |
-|---------|-------|
-| Model, base URL, API key | `.env`, read by `src/hawkeye_assistant/config.py` |
-| Paths | `src/hawkeye_assistant/config.py`: `DATA_DIR`, `TRAIN_FILE`, `TEST_FILE`, `DEMO_FILE`, `STORAGE_DIR`, `MEMORY_DB_DIR`, `RESULTS_FILE` |
-| Training rounds | `POST /train?rounds=` or `run_training(rounds=5)` in `training/train.py` |
-| Lessons saved per round | First 3 mistakes, in `training/train.py` |
-| Mistakes shown to the prompt rewriter | Up to 5, in `optimizer/opro.py` |
-| Lessons retrieved per message | `k=3`, in `agent/classify.py` |
-| Duplicate threshold | Distance under 0.2, in `memory/store.py` |
-| Prune threshold | Score −2 or lower, in `memory/store.py` |
-
-## Project structure
-
-```
-hawkeye-assistant/
-├── src/hawkeye_assistant/
-│   ├── config.py          Settings from .env and all project paths
-│   ├── llm.py             OpenRouter client
-│   ├── agent/             classify(), LABELS, DEFAULT_PROMPT
-│   ├── memory/            Chroma lesson store: add, search, update, cleanup
-│   ├── optimizer/         OPRO prompt rewrite and make_lesson()
-│   ├── evaluation/        evaluate(): accuracy, mistakes, score updates
-│   ├── training/          run_training() loop
-│   ├── tools/             reserved for agent tools
-│   ├── api/               FastAPI app
-│   └── ui/                Streamlit app
-├── data/                  train.json, test.json, demo.json
-├── storage/               memory_db/ and results.json (generated, gitignored)
-├── scripts/               inspect_chroma.py (read-only memory inspector)
-├── tests/                 import smoke tests
-├── .github/workflows/     Ruff CI
-├── .env.example
-├── pyproject.toml
-└── README.md
-```
-
-## Inspecting memory
-
-```bash
-uv run python scripts/inspect_chroma.py
-```
-
-This prints the files on disk, the collection, every lesson with its score, and a sample query. It does not change anything.
-
-## Resetting memory
-
-Lessons live in `storage/memory_db/` (collection `lessons`).
-
-1. Stop the API, the UI, and any training run.
-2. Delete the memory:
-
-   ```bash
-   rm -rf storage/memory_db
-   ```
-
-3. Optional: also delete the saved prompt and training log:
-
-   ```bash
-   rm -f storage/results.json
-   ```
-
-The memory folder is recreated the next time the app starts. There is no HTTP endpoint to reset memory.
 
 ## Development
+
+Install development dependencies and run the Python checks from the repository root:
 
 ```bash
 uv sync --group dev
@@ -256,33 +163,26 @@ uv run ruff check .
 uv run pytest
 ```
 
-- Ruff checks `E`, `F`, and `UP`. `E501` and `E741` are ignored.
-- `tests/test_imports.py` imports every module and checks the data paths. The Streamlit file is compiled, not imported.
-- CI runs `uv run ruff check .` on pushes to `main` and on pull requests.
+Run the UI linter from `ui/`:
 
-For commit and branch rules, see [CONTRIBUTING.md](CONTRIBUTING.md).
+```bash
+npm run lint
+```
 
-## Git
+## Project structure
 
-These paths are gitignored and never committed:
-
-- `.env`, which holds your API key
-- `storage/`, which holds the Chroma memory and `results.json`
-- Virtual environments, caches, and editor files
-
-Commit `data/` changes when you change the training, test, or demo sets.
-
-## Troubleshooting
-
-| Symptom | Likely cause |
-|---------|--------------|
-| UI says it could not reach the API | The API is not running. Start `uv run uvicorn hawkeye_assistant.api.app:app` on port **8000**. |
-| `ModuleNotFoundError: hawkeye_assistant` | Run `uv sync` so the package is installed from `src/`. |
-| Results or classify errors about a missing file | Train once, or use the default prompt until `storage/results.json` exists. |
-| Sidebar lessons do not match the Training tab | Restart Streamlit so it loads the current code. |
-| Training is slow | Each round calls the LLM for every example, plus the prompt rewrite and lesson writes. Reduce `rounds` or shrink `train.json` for a quick run. |
-| Too many similar lessons | Check the duplicate threshold in `memory/store.py`, or reset memory. |
-
-## Author
-
-Chathuri Perera: chathuri@gluonforce.com
+```text
+hawkeye-assistant/
+├── data/                         Training, test, and demo examples
+├── src/hawkeye_assistant/
+│   ├── agent/                     Intent classification
+│   ├── api/                       FastAPI endpoints
+│   ├── evaluation/                Prompt evaluation
+│   ├── memory/                    ChromaDB lesson storage and search
+│   ├── optimizer/                 Lesson generation and prompt rewriting
+│   ├── training/                  Batch training loop
+│   └── ui/                        Streamlit interface
+├── storage/                       Local generated results and memory
+├── tests/                         Python tests
+└── ui/                             Next.js web application
+```
