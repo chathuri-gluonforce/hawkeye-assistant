@@ -1,0 +1,10 @@
+[
+  {"text": "Match statement line 7 to invoice 441 please", "intent": "match_invoice"},
+  {"text": "Any bank lines still without an invoice?", "intent": "unmatched_items"},
+  {"text": "Uploading the statement PDF for September now", "intent": "upload_document"},
+  {"text": "Invoice 50k, bank 47k — something's off", "intent": "amount_mismatch"},
+  {"text": "Is October recon complete yet?", "intent": "recon_status"},
+  {"text": "Show details for invoice INV-102", "intent": "show_details"},
+  {"text": "Who signed off on yesterday's match?", "intent": "audit_query"},
+  {"text": "thanks for the help", "intent": "other"}
+]
