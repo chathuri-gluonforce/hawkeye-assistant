@@ -38,12 +38,42 @@ class Settings(BaseSettings):
         description="OpenAI-compatible API base URL",
     )
 
+    hawkeye_base_url: str = Field(
+        default="http://127.0.0.1:8003",
+        description="Base URL of the Hawkeye backend (source of truth for auth)",
+    )
+    hawkeye_api_prefix: str = Field(
+        default="",
+        description="Optional path prefix for Hawkeye routes, e.g. /api/v1",
+    )
+    hawkeye_timeout_seconds: float = Field(
+        default=10.0,
+        gt=0,
+        le=120,
+        description="Timeout for requests to the Hawkeye backend",
+    )
+    assistant_session_hours: float = Field(default=8.0, gt=0, le=168)
+
     @field_validator("openrouter_model", "openrouter_base_url", mode="before")
     @classmethod
     def strip_strings(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip()
         return value
+
+    @field_validator("hawkeye_base_url", "hawkeye_api_prefix", mode="before")
+    @classmethod
+    def strip_hawkeye_strings(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @field_validator("hawkeye_base_url")
+    @classmethod
+    def check_hawkeye_base_url(cls, value: str) -> str:
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("HAWKEYE_BASE_URL must start with http:// or https://")
+        return value.rstrip("/")
 
 
 @lru_cache

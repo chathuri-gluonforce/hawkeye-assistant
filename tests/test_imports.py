@@ -18,6 +18,10 @@ MODULES = [
     "hawkeye_assistant.training.train",
     "hawkeye_assistant.tools",
     "hawkeye_assistant.api.app",
+    "hawkeye_assistant.hawkeye",
+    "hawkeye_assistant.hawkeye.client",
+    "hawkeye_assistant.hawkeye.schemas",
+    "hawkeye_assistant.hawkeye.auth",
 ]
 
 UI_SCRIPT = Path(__file__).resolve().parents[1] / "src" / "hawkeye_assistant" / "ui" / "streamlit_app.py"
