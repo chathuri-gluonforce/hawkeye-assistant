@@ -39,8 +39,16 @@ def new_prompt(history, mistakes):
     return p
 
 def make_lesson(m):
-    return ask(
-        f"Message: '{m['text']}'. Model said '{m['pred']}', "
-        f"correct is '{m['intent']}'. Write one short general rule "
-        "to avoid this mistake."
+    labels = ", ".join(LABELS)
+    prompt = (
+        "You are correcting a message classifier.\n"
+        f"Allowed labels: {labels}\n"
+        f"Message: {m['text']}\n"
+        f"Wrong label: {m['pred']}\n"
+        f"Correct label: {m['intent']}\n\n"
+        "Write ONE rule under 25 words that names the correct label and the "
+        "wording or topic that signals it. Do not give general coding or "
+        "writing advice. Return only the rule text, with no prefix or example."
     )
+    rule = ask(prompt).strip()
+    return re.sub(r"^(?:example|rule):\s*", "", rule, flags=re.IGNORECASE)

@@ -14,7 +14,7 @@ def run_training(rounds=5):
         score, mistakes = evaluate(train, prompt, learn=True)
         history.append((prompt, score))
         for m in mistakes[:3]:
-            memory.add(make_lesson(m))
+            memory.add(make_lesson(m), example=m["text"])
         memory.cleanup()
         log.append({"round": r, "score": score, "prompt": prompt,
                     "lessons": len(memory.all_lessons())})

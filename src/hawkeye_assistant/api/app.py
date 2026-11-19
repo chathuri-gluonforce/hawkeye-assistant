@@ -98,9 +98,9 @@ def feedback(fb: Feedback):
             memory.update(mid, 1)
         return {"learned": "confirmed"}
     for mid in used:
-        memory.update(mid, -1)
+        memory.update(mid, -3)
     lesson = make_lesson({"text": fb.text, "pred": fb.predicted, "intent": fb.correct})
-    memory.add(lesson)
+    memory.add(lesson, example=fb.text)
     return {"learned": "corrected", "lesson": lesson}
 
 
