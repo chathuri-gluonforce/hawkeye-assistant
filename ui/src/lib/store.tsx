@@ -32,6 +32,8 @@ type Ctx = {
   messages: Msg[];
   setMessages: React.Dispatch<React.SetStateAction<Msg[]>>;
   lessons: Lesson[] | null;
+  lessonsLoading: boolean;
+  lessonsError: string | null;
   refresh: () => Promise<void>;
 };
 
@@ -42,27 +44,66 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [lessons, setLessons] = useState<Lesson[] | null>(null);
+  const [lessonsLoading, setLessonsLoading] = useState(true);
+  const [lessonsError, setLessonsError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const fetchLessons = useCallback(async (): Promise<{
+    lessons: Lesson[] | null;
+    error: string | null;
+  }> => {
     try {
-      setLessons(await getLessons());
-    } catch {
-      setLessons(null);
-    }
-    try {
-      setReady((await getResults()) !== null);
-    } catch {
-      setReady(false);
+      return { lessons: await getLessons(), error: null };
+    } catch (error) {
+      return {
+        lessons: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }, []);
 
+  const fetchReady = useCallback(async () => {
+    try {
+      return (await getResults()) !== null;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setLessonsLoading(true);
+    setLessonsError(null);
+    const lessonRequest = fetchLessons().then(({ lessons: result, error }) => {
+      setLessons(result);
+      setLessonsError(error);
+      setLessonsLoading(false);
+    });
+    const resultsRequest = fetchReady().then(setReady);
+    await Promise.all([lessonRequest, resultsRequest]);
+  }, [fetchLessons, fetchReady]);
+
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    fetchLessons().then(({ lessons: result, error }) => {
+      setLessons(result);
+      setLessonsError(error);
+      setLessonsLoading(false);
+    });
+    fetchReady().then(setReady);
+  }, [fetchLessons, fetchReady]);
 
   return (
     <AppCtx.Provider
-      value={{ mode, setMode, ready, trained: mode === "self" && ready, messages, setMessages, lessons, refresh }}
+      value={{
+        mode,
+        setMode,
+        ready,
+        trained: mode === "self" && ready,
+        messages,
+        setMessages,
+        lessons,
+        lessonsLoading,
+        lessonsError,
+        refresh,
+      }}
     >
       {children}
     </AppCtx.Provider>

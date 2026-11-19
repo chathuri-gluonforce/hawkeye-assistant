@@ -13,7 +13,7 @@ const NAV = [
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const { mode, setMode, ready, lessons } = useApp();
+  const { mode, setMode, ready, lessons, lessonsLoading, lessonsError } = useApp();
   const [open, setOpen] = useState(false);
   const [dark, setDark] = useState(false);
 
@@ -88,8 +88,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">Lessons</div>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-            {lessons === null && <p className="text-xs text-red-600">Memory unavailable. Is the API running?</p>}
-            {lessons?.length === 0 && <p className="text-xs text-zinc-500">No lessons yet.</p>}
+            {lessonsLoading && <p className="text-xs text-zinc-500">Loading memory...</p>}
+            {!lessonsLoading && lessonsError && (
+              <p className="text-xs text-red-600">Memory unavailable: {lessonsError}</p>
+            )}
+            {!lessonsLoading && !lessonsError && lessons?.length === 0 && (
+              <p className="text-xs text-zinc-500">No lessons yet.</p>
+            )}
             {lessons
               ?.slice()
               .sort((a, b) => b.score - a.score)
