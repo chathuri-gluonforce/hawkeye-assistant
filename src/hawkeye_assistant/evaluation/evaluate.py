@@ -10,7 +10,7 @@ def evaluate(data, prompt, learn=False, use_memory=True):
         correct += ok
         if learn:
             for mid in used:
-                memory.update(mid, 1 if ok else -1)
+                memory.update(mid, 1 if ok else -3)
         if not ok:
             mistakes.append({**ex, "pred": pred})
     return correct / len(data), mistakes

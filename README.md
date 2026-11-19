@@ -43,6 +43,18 @@ flowchart LR
 - `storage/memory_db/` contains the local ChromaDB lesson store.
 - `storage/results.json` contains the best prompt, training log, and test scores.
 
+Lessons are embedded with `BAAI/bge-small-en-v1.5` and stored using cosine
+distance. Retrieval ignores matches farther than `0.45`, skips near-duplicate
+examples below `0.08`, and reranks close matches with a small bonus for lessons
+that have worked before. Lesson scores start at `0`, gain `1` for a correct
+classification, lose `3` for an incorrect one, and are bounded from `0` to
+`100`. The original message is indexed while the generated rule is stored with
+the lesson metadata.
+
+The embedding model and distance metric are part of the persisted ChromaDB
+index. Back up or export any existing lessons before rebuilding
+`storage/memory_db/` to use these settings.
+
 The `storage/` files are generated locally and are not included in Git.
 
 ## Requirements
