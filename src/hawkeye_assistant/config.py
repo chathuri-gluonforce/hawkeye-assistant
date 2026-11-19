@@ -53,6 +53,7 @@ class Settings(BaseSettings):
         description="Timeout for requests to the Hawkeye backend",
     )
     assistant_session_hours: float = Field(default=8.0, gt=0, le=168)
+    assistant_cookie_secure: bool = False
 
     @field_validator("openrouter_model", "openrouter_base_url", mode="before")
     @classmethod

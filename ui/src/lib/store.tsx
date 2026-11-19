@@ -1,6 +1,11 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { getLessons, getResults, type Lesson } from "./api";
+import {
+  getLessons,
+  getResults,
+  type AuditResult,
+  type Lesson,
+} from "./api";
 
 export type Msg = {
   id: string;
@@ -8,6 +13,9 @@ export type Msg = {
   text: string;
   intent?: string;
   lessons?: Lesson[];
+  auditResult?: AuditResult;
+  loginPrompt?: boolean;
+  loginError?: string;
   asked?: string;
   feedback?: "pending" | "asking" | "done";
   note?: string;

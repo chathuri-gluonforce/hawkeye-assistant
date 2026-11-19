@@ -4,14 +4,20 @@ import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from hawkeye_assistant.agent.classify import DEFAULT_PROMPT, classify
+from hawkeye_assistant.agent.classify import (
+    DEFAULT_PROMPT,
+    classify,
+    resolve_prompt as select_prompt,
+)
 from hawkeye_assistant.config import RESULTS_FILE, TEST_FILE
+from hawkeye_assistant.api.routes import router as auth_chat_router
 from hawkeye_assistant.evaluation.evaluate import evaluate
 from hawkeye_assistant.memory import store as memory
 from hawkeye_assistant.optimizer.opro import make_lesson
 from hawkeye_assistant.training.train import run_training
 
 app = FastAPI(title="Self-Improving Intent Agent")
+app.include_router(auth_chat_router)
 
 
 class Message(BaseModel):
@@ -39,17 +45,11 @@ def save_results(data):
 
 
 def get_prompt():
-    if os.path.exists(RESULTS_FILE):
-        with open(RESULTS_FILE) as f:
-            return json.load(f)["best_prompt"]
-    return DEFAULT_PROMPT
+    return select_prompt()
 
 
 def resolve_prompt(use_best_prompt: bool) -> str:
-    if use_best_prompt and os.path.exists(RESULTS_FILE):
-        with open(RESULTS_FILE) as f:
-            return json.load(f)["best_prompt"]
-    return DEFAULT_PROMPT
+    return select_prompt(use_best_prompt)
 
 
 def ensure_before_score(data):

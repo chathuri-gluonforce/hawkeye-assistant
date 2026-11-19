@@ -67,6 +67,11 @@ OPENROUTER_API_KEY=your_key_here
 OPENROUTER_MODEL=openai/gpt-4o-mini
 # Optional; defaults to https://openrouter.ai/api/v1
 # OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+# Hawkeye connection (defaults to http://127.0.0.1:8003)
+# HAWKEYE_BASE_URL=http://127.0.0.1:8003
+# HAWKEYE_API_PREFIX=/api/v1
+# Set true when serving over HTTPS in production.
+# ASSISTANT_COOKIE_SECURE=false
 ```
 
 Do not commit `.env` or share your API key. Settings are loaded when the backend starts, so restart the API after changing `.env`.
@@ -89,6 +94,12 @@ uv run --python 3.14 uvicorn hawkeye_assistant.api.app:app --reload
 ```
 
 The API is available at [http://127.0.0.1:8000](http://127.0.0.1:8000). Interactive API documentation is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+In chat, request existing Hawkeye audit records (for example, “show user-created
+audit logs for action MATCH_APPROVED since 2026-11-01”). The assistant requires a Hawkeye
+Supervisor login and only reads audit records; it does not create or modify them.
+It returns concise event summaries and includes detail fields only when the question
+asks for them. Audit records are summarized locally and are not sent to the LLM.
 
 **Terminal 2 — Next.js UI**:
 
